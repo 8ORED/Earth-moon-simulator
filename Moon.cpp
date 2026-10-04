@@ -109,9 +109,9 @@ void display(){
 
     if(lockToMoon){
         float r=toRad(moonAngle);
-        camX=moonX+(-sin(r))*moonCamDistance;
+        camX=moonX-cos(r)*moonCamDistance;
         camY=moonY+moonCamHeight;
-        camZ=moonZ+( cos(r))*moonCamDistance;
+        camZ=moonZ-sin(r)*moonCamDistance;
         lx=moonX; ly=moonY; lz=moonZ;
     } else {
         updateCam();
@@ -130,6 +130,12 @@ void display(){
     GLfloat md[]={0.7f,0.7f,0.7f,1}, ms[]={0.9f,0.9f,0.9f,1};
     setMat(md,ms,80);
     glPushMatrix(); glTranslatef(moonX,moonY,moonZ); drawSphere(0.27f,20,20); glPopMatrix();
+
+    // Sun (drawn at the light position, unlit so it looks self-illuminated)
+    glDisable(GL_LIGHTING);
+    glColor3f(1.0f,0.9f,0.2f);
+    glPushMatrix(); glTranslatef(lightPos[0],lightPos[1],lightPos[2]); drawSphere(0.8f,30,30); glPopMatrix();
+    glEnable(GL_LIGHTING);
 
     drawOverlay();
     glutSwapBuffers();
