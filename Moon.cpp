@@ -2,31 +2,38 @@
 #include <math.h>
 #define PI 3.14159265358979323846f
 #define toRad(d) ((d)*PI/180.0f)
-
+ 
 // ---- State ----
 float moonAngle=0, earthAngle=0, moonOrbitRadius=3;
-float moonCamDistance=2, moonCamHeight=0.5f;
-float moonOrbitSpeed=-0.5f, earthRotationSpeed=2;
+float earthOrbitAngle=0, earthOrbitRadius=12;   // Earth revolves around the Sun (at origin)
+float moonCamDistance=1, moonCamHeight=0;
+float moonOrbitSpeed=-0.5f, earthRotationSpeed=2, earthOrbitSpeed=-0.04f;
 bool  animationPaused=false, lockToMoon=false;
 int   windowWidth=800, windowHeight=600;
-
+ 
 // ---- Camera ----
-float camX=0,camY=0,camZ=8, yaw=-90,pitch=0;
+float camX=0,camY=14,camZ=22, yaw=-90,pitch=-30;
 float camFrontX=0,camFrontY=0,camFrontZ=-1;
 float mouseSensitivity=0.1f, cameraSpeed=0.2f;
-
+ 
 // ---- Lighting ----
-GLfloat lightPos[]     = {10,0,0,1};
+GLfloat lightPos[]     = {0,0,0,1};   // Sun at the origin
 GLfloat lightAmbient[] = {0.2f,0.2f,0.2f,1};
 GLfloat lightDiffuse[] = {0.9f,0.9f,0.9f,1};
 GLfloat lightSpecular[]= {1,1,1,1};
-
+ 
 // ---- Helpers ----
-void getMoonPos(float &x,float &y,float &z){
-    float r=toRad(moonAngle);
-    x=moonOrbitRadius*cos(r); y=0; z=moonOrbitRadius*sin(r);
+void getEarthPos(float &x,float &y,float &z){
+    float a=toRad(earthOrbitAngle);
+    x=earthOrbitRadius*cos(a); y=0; z=earthOrbitRadius*sin(a);
 }
-
+ 
+void getMoonPos(float &x,float &y,float &z){
+    float ex,ey,ez, r=toRad(moonAngle);
+    getEarthPos(ex,ey,ez);
+    x=ex+moonOrbitRadius*cos(r); y=ey; z=ez+moonOrbitRadius*sin(r);
+}
+ 
 void updateCam(){
     float p=toRad(pitch), yw=toRad(yaw);
     float len;
@@ -36,13 +43,13 @@ void updateCam(){
     len=sqrt(camFrontX*camFrontX+camFrontY*camFrontY+camFrontZ*camFrontZ);
     if(len>0){ camFrontX/=len; camFrontY/=len; camFrontZ/=len; }
 }
-
+ 
 void setMat(const GLfloat* d,const GLfloat* s,float sh){
     glMaterialfv(GL_FRONT,GL_DIFFUSE,d);
     glMaterialfv(GL_FRONT,GL_SPECULAR,s);
     glMaterialf (GL_FRONT,GL_SHININESS,sh);
 }
-
+ 
 void drawSphere(float r,int stacks,int slices){
     for(int i=0;i<stacks;i++){
         float t1=i*PI/stacks, t2=(i+1)*PI/stacks;
@@ -66,18 +73,18 @@ void drawSphere(float r,int stacks,int slices){
         glEnd();
     }
 }
-
+ 
 void drawText(float x,float y,const char* t){
     glRasterPos2f(x,y);
     while(*t) glutBitmapCharacter(GLUT_BITMAP_8_BY_13,*t++);
 }
-
+ 
 void drawOverlay(){
     glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity();
     gluOrtho2D(0,windowWidth,0,windowHeight);
     glMatrixMode(GL_MODELVIEW);  glPushMatrix(); glLoadIdentity();
     glDisable(GL_LIGHTING);
-
+ 
     const char* lines[]={
         "=== Controls ===",
         "M - Toggle Moon Lock",
@@ -92,23 +99,25 @@ void drawOverlay(){
     int n=sizeof(lines)/sizeof(*lines);
     for(int i=0;i<n;i++)
         drawText(10, 10+(n-1-i)*15, lines[i]);
-
+ 
     glEnable(GL_LIGHTING);
     glPopMatrix();
     glMatrixMode(GL_PROJECTION); glPopMatrix();
     glMatrixMode(GL_MODELVIEW);
 }
-
+ 
 // ---- Display ----
 void display(){
     glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
     glMatrixMode(GL_MODELVIEW); glLoadIdentity();
-
-    float moonX,moonY,moonZ, lx,ly,lz;
+ 
+    float earthX,earthY,earthZ, moonX,moonY,moonZ, lx,ly,lz;
+    getEarthPos(earthX,earthY,earthZ);
     getMoonPos(moonX,moonY,moonZ);
-
+ 
     if(lockToMoon){
         float r=toRad(moonAngle);
+        // Camera sits on the Earth-Moon line, moonCamDistance from the Moon toward Earth
         camX=moonX-cos(r)*moonCamDistance;
         camY=moonY+moonCamHeight;
         camZ=moonZ-sin(r)*moonCamDistance;
@@ -117,34 +126,34 @@ void display(){
         updateCam();
         lx=camX+camFrontX; ly=camY+camFrontY; lz=camZ+camFrontZ;
     }
-
+ 
     gluLookAt(camX,camY,camZ, lx,ly,lz, 0,1,0);
     glLightfv(GL_LIGHT0,GL_POSITION,lightPos);
-
+ 
     // Earth
     GLfloat ed[]={0.2f,0.4f,1,1}, es[]={0.3f,0.3f,0.3f,1};
     setMat(ed,es,30);
-    glPushMatrix(); glRotatef(earthAngle,0,1,0); drawSphere(1,30,30); glPopMatrix();
-
+    glPushMatrix(); glTranslatef(earthX,earthY,earthZ); glRotatef(earthAngle,0,1,0); drawSphere(1,30,30); glPopMatrix();
+ 
     // Moon
     GLfloat md[]={0.7f,0.7f,0.7f,1}, ms[]={0.9f,0.9f,0.9f,1};
     setMat(md,ms,80);
     glPushMatrix(); glTranslatef(moonX,moonY,moonZ); drawSphere(0.27f,20,20); glPopMatrix();
-
+ 
     // Sun (drawn at the light position, unlit so it looks self-illuminated)
     glDisable(GL_LIGHTING);
     glColor3f(1.0f,0.9f,0.2f);
     glPushMatrix(); glTranslatef(lightPos[0],lightPos[1],lightPos[2]); drawSphere(0.8f,30,30); glPopMatrix();
     glEnable(GL_LIGHTING);
-
+ 
     drawOverlay();
     glutSwapBuffers();
 }
-
+ 
 // ---- Input ----
 void keyboard(unsigned char key,int,int){
     if(lockToMoon && key!='m' && key!='M' && key!='p' && key!='P' && key!='+' && key!='=' && key!='-' && key!=27) return;
-
+ 
     float rx=cos(toRad(yaw-90)), rz=sin(toRad(yaw-90));
     switch(key){
         case 'w': case 'W': camX+=cameraSpeed*camFrontX; camY+=cameraSpeed*camFrontY; camZ+=cameraSpeed*camFrontZ; break;
@@ -153,36 +162,37 @@ void keyboard(unsigned char key,int,int){
         case 'a': case 'A': camX+=cameraSpeed*rx; camZ+=cameraSpeed*rz; break;
         case ' ':            camY+=cameraSpeed; break;
         case 'e': case 'E': camY-=cameraSpeed; break;
-        case 'r': case 'R': camX=0; camY=0; camZ=8; yaw=-90; pitch=0; updateCam(); break;
+        case 'r': case 'R': camX=0; camY=14; camZ=22; yaw=-90; pitch=-30; updateCam(); break;
         case 'm': case 'M': lockToMoon=!lockToMoon; break;
         case 'p': case 'P': animationPaused=!animationPaused; break;
-        case '-':            moonCamDistance+=0.2f; break;
+        case '-':            moonCamDistance+=0.2f; if(moonCamDistance>1.5f)moonCamDistance=1.5f; break;
         case '+': case '=':  moonCamDistance-=0.2f; if(moonCamDistance<0.5f)moonCamDistance=0.5f; break;
         case 27:             exit(0);
     }
     glutPostRedisplay();
 }
-
+ 
 void mouseMotion(int x,int y){
     if(lockToMoon) return;
-
+ 
     yaw  +=(x-windowWidth/2 )*mouseSensitivity;
     pitch+=(windowHeight/2-y)*mouseSensitivity;
     pitch=pitch>89?89:pitch<-89?-89:pitch;
-
+ 
     updateCam();
     glutWarpPointer(windowWidth/2,windowHeight/2);
 }
-
+ 
 void update(int){
     if(!animationPaused){
         moonAngle +=moonOrbitSpeed;  if(moonAngle >=360) moonAngle -=360;
         earthAngle+=earthRotationSpeed; if(earthAngle>=360) earthAngle-=360;
+        earthOrbitAngle+=earthOrbitSpeed; if(earthOrbitAngle<=-360) earthOrbitAngle+=360;
     }
     glutPostRedisplay();
     glutTimerFunc(16,update,0);
 }
-
+ 
 // ---- Init / Reshape / Main ----
 void init(){
     glEnable(GL_DEPTH_TEST); glEnable(GL_LIGHTING); glEnable(GL_LIGHT0); glEnable(GL_NORMALIZE);
@@ -193,7 +203,7 @@ void init(){
     updateCam();
     glutSetCursor(GLUT_CURSOR_NONE);
 }
-
+ 
 void reshape(int w,int h){
     windowWidth=w; windowHeight=h;
     glViewport(0,0,w,h);
@@ -201,7 +211,7 @@ void reshape(int w,int h){
     gluPerspective(60.0,(float)w/h,1.0,50.0);
     glMatrixMode(GL_MODELVIEW);
 }
-
+ 
 int main(int argc,char** argv){
     glutInit(&argc,argv);
     glutInitDisplayMode(GLUT_DOUBLE|GLUT_RGB|GLUT_DEPTH);
@@ -216,3 +226,4 @@ int main(int argc,char** argv){
     glutTimerFunc(0,update,0);
     glutMainLoop();
 }
+ 
