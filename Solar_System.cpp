@@ -166,7 +166,7 @@ void display(){
     glMaterialfv(GL_FRONT,GL_DIFFUSE,md);
     glMaterialfv(GL_FRONT,GL_SPECULAR,ms);
     glMaterialf (GL_FRONT,GL_SHININESS,80);
-    glPushMatrix(); glTranslatef(moonX,moonY,moonZ); drawSphere(0.27f*E,20,20); glPopMatrix();
+    glPushMatrix(); glTranslatef(moonX,moonY,moonZ); glRotatef(-moonAngle,0,1,0); drawSphere(0.27f*E,20,20); glPopMatrix();
 
     // Sun (drawn at the light position, unlit so it looks self-illuminated)
     glDisable(GL_LIGHTING);

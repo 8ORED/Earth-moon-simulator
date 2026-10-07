@@ -1,4 +1,4 @@
-# Solar System Visualization
+# Solar System Visualization: Earth–Moon Phases in OpenGL
 
 A real-time 3D simulation written in C++ with OpenGL and FreeGLUT. It shows the Sun, all eight planets, and Earth's Moon on circular orbits. Planet and Sun sizes are true relative to Earth, and orbital distances are scaled down so the system is navigable. It also demonstrates how the Moon's phases come from lighting geometry.
 
@@ -7,7 +7,7 @@ A real-time 3D simulation written in C++ with OpenGL and FreeGLUT. It shows the 
 - Sun at the origin, acting as the point light source for the whole scene
 - Eight planets (Mercury to Neptune) drawn from a single data table by a single loop in `display()`
 - Every planet revolves around the Sun, with speed following Kepler's third law (closer planets move faster)
-- Earth spins on its axis; the Moon orbits Earth
+- Earth spins on its axis; the Moon orbits Earth and is tidally locked (one rotation per orbit, the same face toward Earth)
 - Moon phases come out of the lighting itself: Phong illumination with per-vertex normals, no phase textures
 - Free-fly camera (keyboard and mouse) and a Moon-lock camera that sits on the Earth–Moon line looking at the Moon
 - **Overview mode (default):** the whole solar system fits on screen, with accurate relative sizes (the Sun is far larger than any planet) and compressed orbit distances
@@ -113,7 +113,7 @@ The scene follows the standard 3D graphics pipeline.
 
 ### Why the phases appear
 
-A phase depends only on the angle between the Sun, Moon and viewer. Each Moon vertex is lit when its normal faces the Sun, so as the Moon orbits, the lit hemisphere seen from Earth changes from new to full and back. The Moon does not spin in this model, but because its surface is a uniform grey that has no visible effect.
+A phase depends only on the angle between the Sun, Moon and viewer. Each Moon vertex is lit when its normal faces the Sun, so as the Moon orbits, the lit hemisphere seen from Earth changes from new to full and back. The Moon is also tidally locked and spins once per orbit, but its surface is a uniform grey, so the spin does not change the phases or show on screen.
 
 ### Animation rates (per frame)
 
@@ -149,14 +149,13 @@ To add or change a planet, edit its row in the `planets[]` table: radius, distan
 - Orbital distances are compressed in both modes: square-root compression in Overview mode, and about 23 times in True-scale mode, relative to the planet sizes.
 - In Overview mode the planet dots are markers, not to scale.
 - The Moon's orbit radius is 3 Earth radii (7.83 units) for visibility. The true value is about 60 Earth radii.
-- The Moon does not rotate (no tidal locking).
+- The Moon's tidally locked rotation is not visible, because it has no surface features or texture.
 - No Saturn rings, moons for other planets, axial tilts, elliptical orbits, textures, or star background.
 - Every planet spins at the same rate.
 - At the true scale, very distant objects lose depth precision, so planets seen from far away can show depth artifacts.
 
 ## Future Work
 
-- Tidal locking for the Moon
 - Earth's axial tilt (23.5°) and elliptical orbits
 - Texture mapping for the Sun, planets and Moon
 - Orbit rings and a star-field background
