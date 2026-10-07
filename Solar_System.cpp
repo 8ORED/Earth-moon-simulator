@@ -61,7 +61,7 @@ Planet planets[]={
     {10.470f, 19.200f*AU, 0.55f,0.85f,0.90f, "uranus.jpg",        0},   // Uranus
     {10.130f, 30.100f*AU, 0.25f,0.35f,0.90f, "neptune.jpg",       0}    // Neptune
 };
-GLuint moonTex=0, sunTex=0, ringTex=0;   // Moon, Sun and Saturn's ring (saturn_ring_alpha.png)
+GLuint moonTex=0, sunTex=0, ringTex=0, starTex=0;   // Moon, Sun and Saturn's ring (saturn_ring_alpha.png) and the star backbround
 
 // ---- Camera ----
 float camX=0,camY=OV_VIEW_H,camZ=0, yaw=-90,pitch=-89;   // top-down view above the Sun, whole system in view
@@ -168,6 +168,16 @@ void display(){
 
     gluLookAt(camX,camY,camZ, lx,ly,lz, 0,1,0);
     glLightfv(GL_LIGHT0,GL_POSITION,lightPos);
+
+    // Star background: a big textured sphere centred on the camera, drawn first and without writing depth,
+    // so it always sits behind everything. Mirrored in X because it is seen from the inside.
+    if(starTex){
+        glDisable(GL_LIGHTING); glEnable(GL_TEXTURE_2D); glDepthMask(GL_FALSE);
+        glBindTexture(GL_TEXTURE_2D,starTex);
+        glColor3f(1,1,1);
+        glPushMatrix(); glTranslatef(camX,camY,camZ); glScalef(-1,1,1); drawSphere(100000,60,60); glPopMatrix();
+        glDepthMask(GL_TRUE); glEnable(GL_LIGHTING);
+    }
 
     glEnable(GL_TEXTURE_2D);   // textures are on for the bodies below, off again before the lines and text
 
@@ -393,7 +403,7 @@ int main(int argc,char** argv){
     glClearColor(0,0,0,1);
     glTexEnvi(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_MODULATE);   // texture colour x lighting
     for(int i=0;i<8;i++) planets[i].id=loadTexture(planets[i].file);
-    moonTex=loadTexture("moon.jpg"); sunTex=loadTexture("sun.jpg"); ringTex=loadTexture("saturn_ring_alpha.png");
+    moonTex=loadTexture("moon.jpg"); sunTex=loadTexture("sun.jpg"); ringTex=loadTexture("saturn_ring_alpha.png"); starTex=loadTexture("stars_milky_way.jpg");
     glutSetCursor(GLUT_CURSOR_NONE);
     glutWarpPointer(windowWidth/2,windowHeight/2);
 
