@@ -19,6 +19,9 @@ const float OV=246.6f, OV_VIEW_H=3000;
 // revolution slows from full speed at SLOW_MULT down to MIN_TIME of normal at the stop distance.
 const float STOP_MULT=3, SLOW_MULT=40, MIN_TIME=0.02f, SUN_STOP=1.2f;
 
+// Saturn's rings: inner/outer edge in Saturn radii (C ring to outer A ring) and axial tilt in degrees
+const float RING_IN=1.24f, RING_OUT=2.27f, RING_TILT=26.7f;
+
 // ---- State ----
 float moonAngle=0, earthAngle=0, earthOrbitAngle=0;
 float moonOrbitRadius=3*E;                 // NOT to scale (true value is ~60*E)
@@ -148,6 +151,28 @@ void display(){
         glMaterialf (GL_FRONT,GL_SHININESS,30);
         glPushMatrix(); glTranslatef(pos[i][0],pos[i][1],pos[i][2]); glRotatef(earthAngle,0,1,0);
         drawSphere(p.radius,30,30); glPopMatrix();
+
+        if(i==5){   // Saturn: flat ring, tilted, lit on both sides (a top and a bottom layer, back faces culled)
+            GLfloat rd[]={0.85f,0.75f,0.55f,1}, rs[]={0.1f,0.1f,0.1f,1};
+            glMaterialfv(GL_FRONT,GL_DIFFUSE,rd);
+            glMaterialfv(GL_FRONT,GL_SPECULAR,rs);
+            glMaterialf (GL_FRONT,GL_SHININESS,10);
+            glPushMatrix(); glTranslatef(pos[i][0],pos[i][1],pos[i][2]); glRotatef(RING_TILT,1,0,0);
+            glEnable(GL_CULL_FACE);
+            for(int s=0;s<2;s++){                         // s=0: top face (normal +Y), s=1: bottom face (normal -Y)
+                float a0=(s?RING_IN:RING_OUT)*p.radius, a1=(s?RING_OUT:RING_IN)*p.radius;   // vertex order sets the facing
+                glNormal3f(0,s?-1:1,0);
+                glBegin(GL_QUAD_STRIP);
+                for(int k=0;k<=96;k++){
+                    float a=2*PI*k/96;
+                    glVertex3f(a0*cos(a),0,a0*sin(a));
+                    glVertex3f(a1*cos(a),0,a1*sin(a));
+                }
+                glEnd();
+            }
+            glDisable(GL_CULL_FACE);
+            glPopMatrix();
+        }
     }
 
     // Overview mode: planets are under a pixel at this zoom, so mark each with a small coloured dot
@@ -166,6 +191,7 @@ void display(){
     glMaterialfv(GL_FRONT,GL_DIFFUSE,md);
     glMaterialfv(GL_FRONT,GL_SPECULAR,ms);
     glMaterialf (GL_FRONT,GL_SHININESS,80);
+    // Tidally locked: it turns once per orbit (same angle, opposite sense), so its -X face always points at Earth
     glPushMatrix(); glTranslatef(moonX,moonY,moonZ); glRotatef(-moonAngle,0,1,0); drawSphere(0.27f*E,20,20); glPopMatrix();
 
     // Sun (drawn at the light position, unlit so it looks self-illuminated)
