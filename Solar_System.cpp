@@ -205,7 +205,7 @@ void display(){
 
     // Sun (drawn at the light position, unlit so it looks self-illuminated)
     glDisable(GL_LIGHTING);
-    glColor3f(1.0f,0.9f,0.2f);
+    glColor3f(0.93f,0.55f,0.21f);
     glPushMatrix(); glTranslatef(lightPos[0],lightPos[1],lightPos[2]); drawSphere(SUN_R,60,60); glPopMatrix();
 
     // Controls overlay (2D, drawn last)
