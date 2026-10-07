@@ -50,7 +50,7 @@ g++ Solar_System.cpp -o Solar_System -framework OpenGL -framework GLUT
 |---|---|
 | `W` `A` `S` `D` | Move forward / left / back / right relative to where you look, staying level (height never changes) |
 | Mouse | Look around |
-| `Space` / `Shift` | Move up / down |
+| `Space` / `Shift` | Move up / down (holding `Shift` alone needs FreeGLUT to report the Shift key) |
 | `O` | Toggle Overview mode (default) / True-scale mode |
 | `R` or `0` | Reset to the top-down view above the Sun |
 | `1`–`8` | Jump above Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, Neptune, stopping at the minimum camera distance |
@@ -59,12 +59,12 @@ g++ Solar_System.cpp -o Solar_System -framework OpenGL -framework GLUT
 | `P` | Pause / resume the animation |
 | `Esc` | Exit |
 
-In Moon-lock mode only `M`, `P`, `+`, `-` and `Esc` are active, so press `M` before using the jump keys or `O`. Movement speed adapts to distance (see Approaching Planets). It is the same whether or not the animation is paused.
+In Moon-lock mode only `M`, `P`, `+`, `-` and `Esc` are active, so press `M` before using the jump keys or `O`. Movement keys are tracked while held and applied every frame, so movement is smooth rather than dependent on the operating system's key repeat. Movement speed adapts to distance (see Approaching Planets) and is the same whether or not the animation is paused.
 
 ## Approaching Planets
 
 - **Stop distance:** the camera can't get closer than 3 radii from a planet's centre (2 radii above its surface), and 1.2 Sun radii from the Sun. If you move into that distance, or a planet's orbit carries it into you, the camera is pushed back out, so you never pass through a body. In Moon-lock mode this is not applied.
-- **Slowdown:** revolution speed (every planet's orbit and the Moon's orbit) slows down gradually as the camera approaches a planet. It is at full speed 40 radii away and falls to 2% of normal at the stop distance. Planet spin is not affected, and the slowdown is switched off in Moon-lock mode so the Moon keeps cycling through its phases.
+- **Slowdown:** revolution speed slows down gradually as the camera approaches a planet. The planets' orbits are at full speed 40 radii away and fall to 2% of normal at the stop distance. The Moon's orbit slows by the same rule but never below half speed, so it stays visibly moving when you are near Earth. Planet spin is not affected, and the slowdown is switched off in Moon-lock mode so the Moon keeps cycling through its phases.
 - **Gradual approach:** each movement keypress covers 10% of the distance to the nearest body's surface (planets and the Sun). Steps are large in open space and shrink automatically as you close in, so you can settle at the stop distance without overshooting.
 - **Jump keys:** `1`–`8` place the camera directly above the planet at exactly the stop distance.
 
@@ -129,7 +129,7 @@ All planets spin at Earth's rate.
 
 ## Code Overview
 
-Everything is in `Solar_System.cpp`, which has ten functions:
+Everything is in `Solar_System.cpp`, which has twelve functions:
 
 | Function | Purpose |
 |---|---|
@@ -137,10 +137,10 @@ Everything is in `Solar_System.cpp`, which has ten functions:
 | `drawSphere()` | Triangle-mesh sphere with per-vertex normals |
 | `physics()` | Per-frame camera and time rules: stop distance around bodies, gradual approach step size, and slowdown of revolutions near planets |
 | `display()` | Camera, light, planets, Moon, Sun, overview dots, controls overlay |
-| `keyboard()` | Key handling, including reset, overview toggle and planet jumps |
-| `special()` | Shift key (move down) |
+| `keyboard()` / `keyboardUp()` | Key presses and releases: one-shot actions (reset, overview toggle, planet jumps, Moon lock, pause) and the held-key table |
+| `special()` / `specialUp()` | Track whether Shift is held (it does not auto-repeat) |
 | `mouseMotion()` | Mouse look |
-| `update()` | Animation timer |
+| `update()` | Animation timer: applies held-key movement, the stop distance and the orbit and spin angles each frame |
 | `reshape()` | Window resize and perspective projection |
 | `main()` | Window, lighting and OpenGL setup, then the main loop |
 

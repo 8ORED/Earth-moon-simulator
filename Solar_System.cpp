@@ -29,13 +29,15 @@ const float STOP_MULT=3, SLOW_MULT=40, MIN_TIME=0.02f, SUN_STOP=1.2f;
 const float RING_IN=1.24f, RING_OUT=2.27f, RING_TILT=26.7f;
 
 // ---- State ----
-float moonAngle=0, earthAngle=0, earthOrbitAngle=0;
+float moonAngle=0, earthAngle=0;
+double earthOrbitAngle=0;             // never wrapped: each planet's angle is a multiple of it, so wrapping would make them jump
 float moonOrbitRadius=3*E;                 // NOT to scale (true value is ~60*E)
 float moonCamDistance=E, moonCamHeight=0;
 float moonOrbitSpeed=-0.5f, earthRotationSpeed=2, earthOrbitSpeed=-0.04f;
 float moveStep=1, tScale=1;                // set every frame by physics()
 bool  animationPaused=false, lockToMoon=false, overview=true;   // overview = default view
 bool  shiftHeld=false;                     // modifier keys don't auto-repeat, so Shift is tracked as held/released
+bool  keys[256];                           // which keys are currently held (lower case)
 int   windowWidth=800, windowHeight=600;
 
 // ---- Planets (Earth is in the table; its Moon is drawn separately) ----
@@ -67,7 +69,7 @@ GLfloat lightSpecular[]= {1,1,1,1};
 // Earth (closer = faster) using the true distance; the radius is the true distance, or the compressed
 // one in overview mode.
 void getPlanetPos(float distance,float &x,float &y,float &z){
-    float a=toRad(earthOrbitAngle*pow(AU/distance,1.5f));
+    float a=toRad((float)fmod(earthOrbitAngle*pow(AU/distance,1.5),360.0));   // double maths, then wrapped per planet
     float r=overview ? OV*(1+sqrt(distance/AU)) : distance;
     x=r*cos(a); y=0; z=r*sin(a);
 }
@@ -237,20 +239,17 @@ void display(){
 }
 
 // ---- Input ----
+// Held keys are tracked (keyboard = pressed, keyboardUp = released) and applied every frame in update(),
+// so movement is smooth instead of depending on the operating system's key repeat.
 void keyboard(unsigned char key,int,int){
-    if(lockToMoon && key!='m' && key!='M' && key!='p' && key!='P' && key!='+' && key!='=' && key!='-' && key!=27) return;
+    if(key>='A'&&key<='Z') key+=32;   // treat Shift+letter as the letter
+    if(key=='+') key='=';             // '+' and '=' are the same key
+    if(lockToMoon && key!='m' && key!='p' && key!='=' && key!='-' && key!=27) return;
+    keys[key]=true;
 
-    float spd=moveStep;
-    float fx=cos(toRad(yaw)),    fz=sin(toRad(yaw));      // forward, flattened onto the horizontal plane
-    float rx=cos(toRad(yaw-90)), rz=sin(toRad(yaw-90));   // sideways
-    switch(key){   // W/A/S/D follow where you look, but never change height (Y); use Space/E for that
-        case 'w': case 'W': camX+=spd*fx; camZ+=spd*fz; break;
-        case 's': case 'S': camX-=spd*fx; camZ-=spd*fz; break;
-        case 'd': case 'D': camX-=spd*rx; camZ-=spd*rz; break;
-        case 'a': case 'A': camX+=spd*rx; camZ+=spd*rz; break;
-        case ' ':            camY+=(glutGetModifiers()&GLUT_ACTIVE_SHIFT)?-spd:spd; break;   // up (Shift+Space = down)
-        case 'o': case 'O': overview=!overview;   // then fall through to reset the camera for the new mode
-        case 'r': case 'R': case '0':
+    switch(key){   // one-shot actions; W/A/S/D/Space/+/- are held keys handled in update()
+        case 'o': overview=!overview;   // then fall through to reset the camera for the new mode
+        case 'r': case '0':
             camX=0; camY=overview?OV_VIEW_H:3*SUN_R; camZ=0; yaw=-90; pitch=-89; break;
         case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': {
             Planet &pl=planets[key-'1'];                       // 1=Mercury ... 3=Earth ... 8=Neptune
@@ -258,18 +257,22 @@ void keyboard(unsigned char key,int,int){
             camX=px; camY=pl.radius*STOP_MULT; camZ=pz; yaw=-90; pitch=-89;   // directly above, at the stop distance
             break;
         }
-        case 'm': case 'M': lockToMoon=!lockToMoon; break;
-        case 'p': case 'P': animationPaused=!animationPaused; break;
-        case '-':            moonCamDistance+=0.2f*E; if(moonCamDistance>1.5f*E)moonCamDistance=1.5f*E; break;
-        case '+': case '=':  moonCamDistance-=0.2f*E; if(moonCamDistance<0.5f*E)moonCamDistance=0.5f*E; break;
-        case 27:             exit(0);
+        case 'm': lockToMoon=!lockToMoon; break;
+        case 'p': animationPaused=!animationPaused; break;
+        case 27:  exit(0);
     }
     physics();   // apply the stop distance immediately
     glutPostRedisplay();
 }
 
+void keyboardUp(unsigned char key,int,int){
+    if(key>='A'&&key<='Z') key+=32;
+    if(key=='+') key='=';
+    keys[key]=false;
+}
+
 // Shift on its own moves the camera down while held (FreeGLUT reports it as a special key; update() does the
-// moving every frame). Shift+Space also moves down on any GLUT.
+// moving every frame).
 void special(int key,int,int){
     if(key==GLUT_KEY_SHIFT_L || key==GLUT_KEY_SHIFT_R) shiftHeld=true;
 }
@@ -289,12 +292,24 @@ void mouseMotion(int x,int y){
 }
 
 void update(int){
-    if(shiftHeld && !lockToMoon) camY-=moveStep*0.5f;   // held Shift: steady descent (about the rate of a repeating key)
+    float step=moveStep*0.5f;   // per frame: about the rate of a repeating key at 60 FPS
+    if(!lockToMoon){
+        float fx=cos(toRad(yaw)),    fz=sin(toRad(yaw));      // forward, flattened onto the horizontal plane
+        float rx=cos(toRad(yaw-90)), rz=sin(toRad(yaw-90));   // sideways
+        float f=keys['w']-keys['s'], r=keys['d']-keys['a'], u=keys[' ']-shiftHeld;   // each -1, 0 or +1
+        camX+=step*(f*fx-r*rx);   // W/A/S/D follow where you look but never change height (Y)
+        camZ+=step*(f*fz-r*rz);
+        camY+=step*u;             // Space up, Shift down
+    } else {
+        moonCamDistance+=(keys['-']-keys['='])*0.02f*E;   // '-' moves the camera toward Earth, '+' toward the Moon
+        if(moonCamDistance>1.5f*E) moonCamDistance=1.5f*E;
+        if(moonCamDistance<0.5f*E) moonCamDistance=0.5f*E;
+    }
     physics();   // planets move, so re-check the camera against them every frame
     if(!animationPaused){
-        moonAngle +=moonOrbitSpeed*tScale;  if(moonAngle >=360) moonAngle -=360;
+        moonAngle +=moonOrbitSpeed*(0.5f+0.5f*tScale);  if(moonAngle <=-360) moonAngle +=360;   // Moon slows to half speed at most
         earthAngle+=earthRotationSpeed;     if(earthAngle>=360) earthAngle-=360;
-        earthOrbitAngle+=earthOrbitSpeed*tScale; if(earthOrbitAngle<=-360) earthOrbitAngle+=360;
+        earthOrbitAngle+=earthOrbitSpeed*tScale;
     }
     glutPostRedisplay();
     glutTimerFunc(16,update,0);
@@ -323,7 +338,9 @@ int main(int argc,char** argv){
     glutWarpPointer(windowWidth/2,windowHeight/2);
 
     glutDisplayFunc(display);
+    glutIgnoreKeyRepeat(1);                    // held keys are tracked, so ignore the OS auto-repeat
     glutKeyboardFunc(keyboard);
+    glutKeyboardUpFunc(keyboardUp);
     glutSpecialFunc(special);
     glutSpecialUpFunc(specialUp);
     glutPassiveMotionFunc(mouseMotion);
