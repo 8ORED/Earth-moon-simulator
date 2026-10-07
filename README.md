@@ -1,4 +1,4 @@
-# Solar System Visualization: Earth–Moon Phases in OpenGL
+# Solar System Visualization
 
 A real-time 3D simulation written in C++ with OpenGL and FreeGLUT. It shows the Sun, all eight planets, and Earth's Moon on circular orbits. Planet and Sun sizes are true relative to each other, and orbital distances are scaled down so the system is navigable. It also demonstrates how the Moon's phases come from lighting geometry.
 
@@ -64,6 +64,7 @@ Put these images in a folder named `textures` next to where you run the program:
 | `saturn_ring_alpha.png` | Saturn's ring (with transparency) |
 | `uranus.jpg` | Uranus |
 | `neptune.jpg` | Neptune |
+| `stars_milky_way.jpg` | Background |
 
 Any missing file is reported in the console and that body is drawn in a plain colour instead, so the program still runs. The 2k versions of the images are recommended, because larger ones take longer to load at start-up.
 
@@ -183,7 +184,7 @@ To add or change a planet, edit its row in the `planets[]` table: radius, distan
 - Orbital distances are compressed in both modes: square-root compression in Overview mode, and about 23 times in True-scale mode, relative to the planet sizes.
 - In Overview mode the planet dots are markers, not to scale.
 - The Moon's orbit radius is 3 Earth radii (7.83 units) for visibility. The true value is about 60 Earth radii.
-- Saturn casts no shadow on its ring, and the ring does not receive one from the planet. No moons for other planets, planetary axial tilts (other than the ring's), elliptical orbits, or star background.
+- Saturn casts no shadow on its ring, and the ring does not receive one from the planet. No moons for other planets, planetary axial tilts (other than the ring's), or elliptical orbits.
 - Every planet spins at the same rate.
 - At the true scale, very distant objects lose depth precision, so planets seen from far away can show depth artifacts.
 
@@ -191,4 +192,3 @@ To add or change a planet, edit its row in the `planets[]` table: radius, distan
 
 - Earth's axial tilt (23.5°) and elliptical orbits
 - Bump or normal maps, cloud layers for Earth and Venus, and night-side city lights
-- Orbit rings and a star-field background
