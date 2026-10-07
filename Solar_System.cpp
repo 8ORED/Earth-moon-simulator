@@ -1,6 +1,11 @@
 #include <GL/glut.h>
 #include <stdlib.h>
 #include <math.h>
+#include <stdio.h>
+#define STB_IMAGE_IMPLEMENTATION   // image loader (public domain, single header)
+#define STBI_ONLY_JPEG
+#define STBI_ONLY_PNG
+#include "stb_image.h"
 #define PI 3.14159265358979323846f
 #define toRad(d) ((d)*PI/180.0f)
 
@@ -35,6 +40,8 @@ float moonOrbitRadius=3*E;                 // NOT to scale (true value is ~60*E)
 float moonCamDistance=E, moonCamHeight=0;
 float moonOrbitSpeed=-0.5f, earthRotationSpeed=2, earthOrbitSpeed=-0.04f;
 float moveStep=1, tScale=1;                // set every frame by physics()
+float camSpeed=0;                          // distance moved per frame while a movement key is held
+bool  debug=false;                         // B toggles the camera position / speed readout
 bool  animationPaused=false, lockToMoon=false, overview=true;   // overview = default view
 bool  shiftHeld=false;                     // modifier keys don't auto-repeat, so Shift is tracked as held/released
 bool  keys[256];                           // which keys are currently held (lower case)
@@ -42,17 +49,19 @@ int   windowWidth=800, windowHeight=600;
 
 // ---- Planets (Earth is in the table; its Moon is drawn separately) ----
 // radius (Mercury=1), distance from Sun (AU x scale above), diffuse RGB
-struct Planet{ float radius, distance, r,g,b; };
+// file = texture in the textures/ folder; id = OpenGL texture (0 = not loaded, the plain colour is used instead)
+struct Planet{ float radius, distance, r,g,b; const char* file; GLuint id; };
 Planet planets[]={
-    { 1.000f,  0.387f*AU, 0.60f,0.60f,0.60f},   // Mercury
-    { 2.478f,  0.723f*AU, 0.90f,0.80f,0.50f},   // Venus
-    {     E,   1.000f*AU, 0.20f,0.40f,1.00f},   // Earth
-    { 1.389f,  1.524f*AU, 0.80f,0.30f,0.15f},   // Mars
-    {29.270f,  5.203f*AU, 0.80f,0.65f,0.50f},   // Jupiter
-    {24.670f,  9.580f*AU, 0.90f,0.80f,0.55f},   // Saturn
-    {10.470f, 19.200f*AU, 0.55f,0.85f,0.90f},   // Uranus
-    {10.130f, 30.100f*AU, 0.25f,0.35f,0.90f}    // Neptune
+    { 1.000f,  0.387f*AU, 0.60f,0.60f,0.60f, "mercury.jpg",       0},   // Mercury
+    { 2.478f,  0.723f*AU, 0.90f,0.80f,0.50f, "venus_surface.jpg", 0},   // Venus
+    {     E,   1.000f*AU, 0.20f,0.40f,1.00f, "earth.jpg",         0},   // Earth
+    { 1.389f,  1.524f*AU, 0.80f,0.30f,0.15f, "mars.jpg",          0},   // Mars
+    {29.270f,  5.203f*AU, 0.80f,0.65f,0.50f, "jupiter.jpg",       0},   // Jupiter
+    {24.670f,  9.580f*AU, 0.90f,0.80f,0.55f, "saturn.jpg",        0},   // Saturn
+    {10.470f, 19.200f*AU, 0.55f,0.85f,0.90f, "uranus.jpg",        0},   // Uranus
+    {10.130f, 30.100f*AU, 0.25f,0.35f,0.90f, "neptune.jpg",       0}    // Neptune
 };
+GLuint moonTex=0, sunTex=0, ringTex=0;   // Moon, Sun and Saturn's ring (saturn_ring_alpha.png)
 
 // ---- Camera ----
 float camX=0,camY=OV_VIEW_H,camZ=0, yaw=-90,pitch=-89;   // top-down view above the Sun, whole system in view
@@ -74,24 +83,35 @@ void getPlanetPos(float distance,float &x,float &y,float &z){
     x=r*cos(a); y=0; z=r*sin(a);
 }
 
+// Loads textures/<file> as an OpenGL texture with mipmaps. Returns 0 if the file is missing (the plain colour is used).
+GLuint loadTexture(const char* file){
+    char path[128]; sprintf(path,"textures/%s",file);
+    int w,h,n; unsigned char* px=stbi_load(path,&w,&h,&n,4);   // always 4 channels (RGBA)
+    if(!px){ printf("Texture not found: %s\n",path); return 0; }
+    GLuint id; glGenTextures(1,&id); glBindTexture(GL_TEXTURE_2D,id);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_REPEAT);   // longitude wraps around
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP);    // latitude does not
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
+    gluBuild2DMipmaps(GL_TEXTURE_2D,GL_RGBA,w,h,GL_RGBA,GL_UNSIGNED_BYTE,px);
+    stbi_image_free(px);
+    return id;
+}
+
 void drawSphere(float r,int stacks,int slices){
     for(int i=0;i<stacks;i++){
         float t1=i*PI/stacks, t2=(i+1)*PI/stacks;
         glBegin(GL_TRIANGLES);
         for(int j=0;j<slices;j++){
             float p1=j*2*PI/slices, p2=(j+1)*2*PI/slices;
-            float v[4][3]={
-                {r*sin(t1)*cos(p1), r*cos(t1), r*sin(t1)*sin(p1)},
-                {r*sin(t2)*cos(p1), r*cos(t2), r*sin(t2)*sin(p1)},
-                {r*sin(t2)*cos(p2), r*cos(t2), r*sin(t2)*sin(p2)},
-                {r*sin(t1)*cos(p2), r*cos(t1), r*sin(t1)*sin(p2)}
-            };
-            // Triangle 1: 0,1,2  Triangle 2: 0,2,3
-            int idx[]={0,1,2, 0,2,3};
+            float theta[4]={t1,t2,t2,t1}, phi[4]={p1,p1,p2,p2};
+            int idx[]={0,1,2, 0,2,3};   // triangle 1: 0,1,2  triangle 2: 0,2,3
             for(int k=0;k<6;k++){
                 int n=idx[k];
-                glNormal3f(v[n][0]/r, v[n][1]/r, v[n][2]/r);
-                glVertex3f(v[n][0],   v[n][1],   v[n][2]);
+                float x=sin(theta[n])*cos(phi[n]), y=cos(theta[n]), z=sin(theta[n])*sin(phi[n]);
+                glTexCoord2f(1-phi[n]/(2*PI), theta[n]/PI);   // s: longitude (left to right = east), t: pole to pole
+                glNormal3f(x,y,z);        // unit sphere normal
+                glVertex3f(r*x,r*y,r*z);  // sphere vertex
             }
         }
         glEnd();
@@ -149,54 +169,39 @@ void display(){
     gluLookAt(camX,camY,camZ, lx,ly,lz, 0,1,0);
     glLightfv(GL_LIGHT0,GL_POSITION,lightPos);
 
+    glEnable(GL_TEXTURE_2D);   // textures are on for the bodies below, off again before the lines and text
+
     // Planets (including Earth): each revolves around the Sun and spins
     float pos[8][3];
     for(int i=0;i<8;i++){
         Planet &p=planets[i];
         getPlanetPos(p.distance,pos[i][0],pos[i][1],pos[i][2]);
-        GLfloat pd[]={p.r,p.g,p.b,1}, ps[]={0.3f,0.3f,0.3f,1};
+        // textured: white material so the texture shows its own colours; otherwise the plain colour
+        GLfloat pd[]={p.id?1:p.r, p.id?1:p.g, p.id?1:p.b, 1}, ps[]={0.1f,0.1f,0.1f,1};
+        glBindTexture(GL_TEXTURE_2D,p.id);
         glMaterialfv(GL_FRONT,GL_DIFFUSE,pd);
         glMaterialfv(GL_FRONT,GL_SPECULAR,ps);
         glMaterialf (GL_FRONT,GL_SHININESS,30);
         glPushMatrix(); glTranslatef(pos[i][0],pos[i][1],pos[i][2]); glRotatef(earthAngle,0,1,0);
         drawSphere(p.radius,30,30); glPopMatrix();
 
-        if(i==5){   // Saturn: flat ring, tilted, lit on both sides (a top and a bottom layer, back faces culled)
-            GLfloat rd[]={0.85f,0.75f,0.55f,1}, rs[]={0.1f,0.1f,0.1f,1};
-            glMaterialfv(GL_FRONT,GL_DIFFUSE,rd);
-            glMaterialfv(GL_FRONT,GL_SPECULAR,rs);
-            glMaterialf (GL_FRONT,GL_SHININESS,10);
-            glPushMatrix(); glTranslatef(pos[i][0],pos[i][1],pos[i][2]); glRotatef(RING_TILT,1,0,0);
-            glEnable(GL_CULL_FACE);
-            for(int s=0;s<2;s++){                         // s=0: top face (normal +Y), s=1: bottom face (normal -Y)
-                float a0=(s?RING_IN:RING_OUT)*p.radius, a1=(s?RING_OUT:RING_IN)*p.radius;   // vertex order sets the facing
-                glNormal3f(0,s?-1:1,0);
-                glBegin(GL_QUAD_STRIP);
-                for(int k=0;k<=96;k++){
-                    float a=2*PI*k/96;
-                    glVertex3f(a0*cos(a),0,a0*sin(a));
-                    glVertex3f(a1*cos(a),0,a1*sin(a));
-                }
-                glEnd();
-            }
-            glDisable(GL_CULL_FACE);
-            glPopMatrix();
-        }
     }
 
     // Overview mode: planets are under a pixel at this zoom, so mark each with a small coloured dot
     if(overview){
-        glDisable(GL_LIGHTING); glPointSize(4);
+        glDisable(GL_LIGHTING); glDisable(GL_TEXTURE_2D); glPointSize(2);
         glBegin(GL_POINTS);
         for(int i=0;i<8;i++){
             glColor3f(planets[i].r,planets[i].g,planets[i].b);
             glVertex3f(pos[i][0],pos[i][1],pos[i][2]);
         }
-        glEnd(); glEnable(GL_LIGHTING);
+        glEnd(); glEnable(GL_LIGHTING); glEnable(GL_TEXTURE_2D);
     }
 
     // Moon
-    GLfloat md[]={0.7f,0.7f,0.7f,1}, ms[]={0.9f,0.9f,0.9f,1};
+    float mk=moonTex?1.0f:0.7f;   // white material when textured, grey otherwise
+    GLfloat md[]={mk,mk,mk,1}, ms[]={0.2f,0.2f,0.2f,1};
+    glBindTexture(GL_TEXTURE_2D,moonTex);
     glMaterialfv(GL_FRONT,GL_DIFFUSE,md);
     glMaterialfv(GL_FRONT,GL_SPECULAR,ms);
     glMaterialf (GL_FRONT,GL_SHININESS,80);
@@ -205,8 +210,48 @@ void display(){
 
     // Sun (drawn at the light position, unlit so it looks self-illuminated)
     glDisable(GL_LIGHTING);
-    glColor3f(0.93f,0.55f,0.21f);
+    glBindTexture(GL_TEXTURE_2D,sunTex);
+    if(sunTex) glColor3f(1,1,1); else glColor3f(0.93f,0.55f,0.21f);   // plain colour only if the texture is missing
     glPushMatrix(); glTranslatef(lightPos[0],lightPos[1],lightPos[2]); drawSphere(SUN_R,60,60); glPopMatrix();
+
+    // Saturn's ring: flat, tilted, lit on both sides (a top and a bottom layer, back faces culled).
+    // Textured with transparency, so it is drawn after the opaque bodies and does not write depth.
+    glEnable(GL_LIGHTING); glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA); glDepthMask(GL_FALSE);
+    float rk=ringTex?1.0f:0.8f;   // white material when textured, tan otherwise
+    GLfloat rd[]={rk,ringTex?1.0f:0.7f,ringTex?1.0f:0.5f,1}, rs[]={0,0,0,1};
+    glMaterialfv(GL_FRONT,GL_DIFFUSE,rd);
+    glMaterialfv(GL_FRONT,GL_SPECULAR,rs);
+    glBindTexture(GL_TEXTURE_2D,ringTex);
+    glPushMatrix(); glTranslatef(pos[5][0],pos[5][1],pos[5][2]); glRotatef(RING_TILT,1,0,0);   // pos[5] = Saturn
+    glEnable(GL_CULL_FACE);
+    for(int L=0;L<2;L++){                              // L=0: top face (normal +Y), L=1: bottom face (normal -Y)
+        float a0=(L?RING_IN:RING_OUT)*planets[5].radius, a1=(L?RING_OUT:RING_IN)*planets[5].radius;   // vertex order sets the facing
+        float u0=L?0:1, u1=L?1:0;                      // texture s across the ring: 0 at the inner edge, 1 at the outer edge
+        glNormal3f(0,L?-1:1,0);
+        glBegin(GL_QUAD_STRIP);
+        for(int k=0;k<=96;k++){
+            float a=2*PI*k/96;
+            glTexCoord2f(u0,0.5f); glVertex3f(a0*cos(a),0,a0*sin(a));
+            glTexCoord2f(u1,0.5f); glVertex3f(a1*cos(a),0,a1*sin(a));
+        }
+        glEnd();
+    }
+    glDisable(GL_CULL_FACE);
+    glPopMatrix();
+    glDepthMask(GL_TRUE); glDisable(GL_BLEND); glDisable(GL_LIGHTING); glDisable(GL_TEXTURE_2D);
+
+    // Faint orbit lines: a circle through each planet, radius taken from its current position.
+    // Drawn after the opaque objects, because blended lines must not block anything behind them.
+    glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+    for(int i=0;i<8;i++){
+        float orad=sqrt(pos[i][0]*pos[i][0]+pos[i][2]*pos[i][2]);
+        glColor4f(planets[i].r,planets[i].g,planets[i].b,0.3f);
+        glBegin(GL_LINE_LOOP);
+        for(int k=0;k<360;k++) glVertex3f(orad*cos(toRad(k)),0,orad*sin(toRad(k)));
+        glEnd();
+    }
+    glDisable(GL_BLEND);
+    glColor3f(1,1,1);   // controls text colour
 
     // Controls overlay (2D, drawn last)
     glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity();
@@ -216,6 +261,7 @@ void display(){
         "=== Controls ===",
         "M - Toggle Moon Lock",
         "P - Pause Animation",
+        "B - Debug (camera position / speed)",
         "WASD - Move Camera (level)",
         "Mouse - Look Around",
         "R/0 - Reset (above Sun)",
@@ -229,6 +275,16 @@ void display(){
     for(int i=0;i<n;i++){
         glRasterPos2f(10, 10+(n-1-i)*15);
         for(const char* c=lines[i];*c;c++) glutBitmapCharacter(GLUT_BITMAP_8_BY_13,*c);
+    }
+    if(debug){   // camera readout, top-left
+        char dbg[2][96];
+        sprintf(dbg[0],"Camera: %.1f, %.1f, %.1f",camX,camY,camZ);
+        if(lockToMoon) sprintf(dbg[1],"Speed: n/a (Moon lock)");
+        else           sprintf(dbg[1],"Speed: %.2f units/s",camSpeed*1000/16);   // update() runs every 16 ms
+        for(int i=0;i<2;i++){
+            glRasterPos2f(10, windowHeight-20-i*15);
+            for(const char* c=dbg[i];*c;c++) glutBitmapCharacter(GLUT_BITMAP_8_BY_13,*c);
+        }
     }
     glEnable(GL_LIGHTING);
     glPopMatrix();
@@ -244,7 +300,7 @@ void display(){
 void keyboard(unsigned char key,int,int){
     if(key>='A'&&key<='Z') key+=32;   // treat Shift+letter as the letter
     if(key=='+') key='=';             // '+' and '=' are the same key
-    if(lockToMoon && key!='m' && key!='p' && key!='=' && key!='-' && key!=27) return;
+    if(lockToMoon && key!='m' && key!='p' && key!='b' && key!='=' && key!='-' && key!=27) return;
     keys[key]=true;
 
     switch(key){   // one-shot actions; W/A/S/D/Space/+/- are held keys handled in update()
@@ -259,6 +315,7 @@ void keyboard(unsigned char key,int,int){
         }
         case 'm': lockToMoon=!lockToMoon; break;
         case 'p': animationPaused=!animationPaused; break;
+        case 'b': debug=!debug; break;
         case 27:  exit(0);
     }
     physics();   // apply the stop distance immediately
@@ -292,14 +349,14 @@ void mouseMotion(int x,int y){
 }
 
 void update(int){
-    float step=moveStep*0.5f;   // per frame: about the rate of a repeating key at 60 FPS
+    camSpeed=moveStep*0.5f;   // per frame: about the rate of a repeating key at 60 FPS
     if(!lockToMoon){
         float fx=cos(toRad(yaw)),    fz=sin(toRad(yaw));      // forward, flattened onto the horizontal plane
         float rx=cos(toRad(yaw-90)), rz=sin(toRad(yaw-90));   // sideways
         float f=keys['w']-keys['s'], r=keys['d']-keys['a'], u=keys[' ']-shiftHeld;   // each -1, 0 or +1
-        camX+=step*(f*fx-r*rx);   // W/A/S/D follow where you look but never change height (Y)
-        camZ+=step*(f*fz-r*rz);
-        camY+=step*u;             // Space up, Shift down
+        camX+=camSpeed*(f*fx-r*rx);   // W/A/S/D follow where you look but never change height (Y)
+        camZ+=camSpeed*(f*fz-r*rz);
+        camY+=camSpeed*u;         // Space up, Shift down
     } else {
         moonCamDistance+=(keys['-']-keys['='])*0.02f*E;   // '-' moves the camera toward Earth, '+' toward the Moon
         if(moonCamDistance>1.5f*E) moonCamDistance=1.5f*E;
@@ -334,6 +391,9 @@ int main(int argc,char** argv){
     glLightfv(GL_LIGHT0,GL_DIFFUSE, lightDiffuse);
     glLightfv(GL_LIGHT0,GL_SPECULAR,lightSpecular);
     glClearColor(0,0,0,1);
+    glTexEnvi(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_MODULATE);   // texture colour x lighting
+    for(int i=0;i<8;i++) planets[i].id=loadTexture(planets[i].file);
+    moonTex=loadTexture("moon.jpg"); sunTex=loadTexture("sun.jpg"); ringTex=loadTexture("saturn_ring_alpha.png");
     glutSetCursor(GLUT_CURSOR_NONE);
     glutWarpPointer(windowWidth/2,windowHeight/2);
 

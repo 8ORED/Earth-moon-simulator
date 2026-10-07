@@ -8,7 +8,10 @@ A real-time 3D simulation written in C++ with OpenGL and FreeGLUT. It shows the 
 - Eight planets (Mercury to Neptune) drawn from a single data table by a single loop in `display()`
 - Every planet revolves around the Sun, with speed following Kepler's third law (closer planets move faster)
 - Saturn has a tilted ring (1.24 to 2.27 Saturn radii, tilted 26.7°), lit on both sides
+- Faint, planet-coloured orbit lines in both modes
+- Debug readout (`B`) showing the camera position and movement speed
 - Earth spins on its axis; the Moon orbits Earth and is tidally locked (one rotation per orbit, the same face toward Earth)
+- Textured Sun, planets, Moon and Saturn's ring (see Textures)
 - Moon phases come out of the lighting itself: Phong illumination with per-vertex normals, no phase textures
 - Free-fly camera (keyboard and mouse) and a Moon-lock camera that sits on the Earth–Moon line looking at the Moon
 - **Overview mode (default):** the whole solar system fits on screen, with accurate relative sizes (the Sun is far larger than any planet) and compressed orbit distances
@@ -19,7 +22,7 @@ A real-time 3D simulation written in C++ with OpenGL and FreeGLUT. It shows the 
 
 ## Build and Run
 
-You need a C++ compiler plus OpenGL and FreeGLUT.
+You need a C++ compiler plus OpenGL and FreeGLUT. The image loader `stb_image.h` is included in the repository, so there is nothing else to install. Run the program from the folder that contains the `textures/` folder (see Textures).
 
 **Windows (MinGW):**
 
@@ -44,6 +47,33 @@ g++ Solar_System.cpp -o Solar_System -lglut -lGLU -lGL
 g++ Solar_System.cpp -o Solar_System -framework OpenGL -framework GLUT
 ```
 
+## Textures
+
+Put these images in a folder named `textures` next to where you run the program:
+
+| File | Used for |
+|---|---|
+| `sun.jpg` | Sun |
+| `mercury.jpg` | Mercury |
+| `venus_surface.jpg` | Venus |
+| `earth.jpg` | Earth |
+| `moon.jpg` | Moon |
+| `mars.jpg` | Mars |
+| `jupiter.jpg` | Jupiter |
+| `saturn.jpg` | Saturn |
+| `saturn_ring_alpha.png` | Saturn's ring (with transparency) |
+| `uranus.jpg` | Uranus |
+| `neptune.jpg` | Neptune |
+
+Any missing file is reported in the console and that body is drawn in a plain colour instead, so the program still runs. The 2k versions of the images are recommended, because larger ones take longer to load at start-up.
+
+Sphere textures are equirectangular maps (longitude left to right, latitude top to bottom). The ring image is read as a radial strip: its left edge is the inner edge of the ring and its right edge is the outer edge.
+
+### Credits
+
+- Textures: [Solar System Scope](https://www.solarsystemscope.com/textures/), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+- Image loading: [`stb_image.h`](https://github.com/nothings/stb) by Sean Barrett, public domain.
+
 ## Controls
 
 | Key | Action |
@@ -57,9 +87,10 @@ g++ Solar_System.cpp -o Solar_System -framework OpenGL -framework GLUT
 | `M` | Toggle Moon-lock camera |
 | `+` / `-` | Move the Moon-lock camera closer to / farther from the Moon |
 | `P` | Pause / resume the animation |
+| `B` | Toggle the debug readout: camera position and movement speed (top-left) |
 | `Esc` | Exit |
 
-In Moon-lock mode only `M`, `P`, `+`, `-` and `Esc` are active, so press `M` before using the jump keys or `O`. Movement keys are tracked while held and applied every frame, so movement is smooth rather than dependent on the operating system's key repeat. Movement speed adapts to distance (see Approaching Planets) and is the same whether or not the animation is paused.
+In Moon-lock mode only `M`, `P`, `B`, `+`, `-` and `Esc` are active, so press `M` before using the jump keys or `O`. Movement keys are tracked while held and applied every frame, so movement is smooth rather than dependent on the operating system's key repeat. Movement speed adapts to distance (see Approaching Planets) and is the same whether or not the animation is paused.
 
 ## Approaching Planets
 
@@ -114,7 +145,7 @@ The scene follows the standard 3D graphics pipeline.
 
 ### Why the phases appear
 
-A phase depends only on the angle between the Sun, Moon and viewer. Each Moon vertex is lit when its normal faces the Sun, so as the Moon orbits, the lit hemisphere seen from Earth changes from new to full and back. The Moon is also tidally locked and spins once per orbit, but its surface is a uniform grey, so the spin does not change the phases or show on screen.
+A phase depends only on the angle between the Sun, Moon and viewer. Each Moon vertex is lit when its normal faces the Sun, so as the Moon orbits, the lit hemisphere seen from Earth changes from new to full and back. The Moon is also tidally locked and spins once per orbit, so the same face of its texture always points at Earth. The spin does not change the phases.
 
 ### Animation rates (per frame)
 
@@ -129,14 +160,15 @@ All planets spin at Earth's rate.
 
 ## Code Overview
 
-Everything is in `Solar_System.cpp`, which has twelve functions:
+Everything is in `Solar_System.cpp`, which has thirteen functions:
 
 | Function | Purpose |
 |---|---|
 | `getPlanetPos()` | Position of a planet on its circular orbit (Kepler speed, true or compressed radius) |
-| `drawSphere()` | Triangle-mesh sphere with per-vertex normals |
+| `loadTexture()` | Loads an image from `textures/` into an OpenGL texture with mipmaps |
+| `drawSphere()` | Triangle-mesh sphere with per-vertex normals and texture coordinates |
 | `physics()` | Per-frame camera and time rules: stop distance around bodies, gradual approach step size, and slowdown of revolutions near planets |
-| `display()` | Camera, light, planets, Moon, Sun, overview dots, controls overlay |
+| `display()` | Camera, light, planets, Moon, Sun, Saturn's ring, orbit lines, overview dots, controls overlay |
 | `keyboard()` / `keyboardUp()` | Key presses and releases: one-shot actions (reset, overview toggle, planet jumps, Moon lock, pause) and the held-key table |
 | `special()` / `specialUp()` | Track whether Shift is held (it does not auto-repeat) |
 | `mouseMotion()` | Mouse look |
@@ -151,13 +183,12 @@ To add or change a planet, edit its row in the `planets[]` table: radius, distan
 - Orbital distances are compressed in both modes: square-root compression in Overview mode, and about 23 times in True-scale mode, relative to the planet sizes.
 - In Overview mode the planet dots are markers, not to scale.
 - The Moon's orbit radius is 3 Earth radii (7.83 units) for visibility. The true value is about 60 Earth radii.
-- The Moon's tidally locked rotation is not visible, because it has no surface features or texture.
-- Saturn's ring is a single flat, opaque band: no gaps, transparency, or shadow cast by the planet. No moons for other planets, planetary axial tilts (other than the ring's), elliptical orbits, textures, or star background.
+- Saturn casts no shadow on its ring, and the ring does not receive one from the planet. No moons for other planets, planetary axial tilts (other than the ring's), elliptical orbits, or star background.
 - Every planet spins at the same rate.
 - At the true scale, very distant objects lose depth precision, so planets seen from far away can show depth artifacts.
 
 ## Future Work
 
 - Earth's axial tilt (23.5°) and elliptical orbits
-- Texture mapping for the Sun, planets and Moon
+- Bump or normal maps, cloud layers for Earth and Venus, and night-side city lights
 - Orbit rings and a star-field background
