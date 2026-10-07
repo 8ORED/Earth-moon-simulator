@@ -4,6 +4,12 @@
 #define PI 3.14159265358979323846f
 #define toRad(d) ((d)*PI/180.0f)
 
+// FreeGLUT's special-key codes for the Shift keys (not declared by every glut.h)
+#ifndef GLUT_KEY_SHIFT_L
+#define GLUT_KEY_SHIFT_L 0x0070
+#define GLUT_KEY_SHIFT_R 0x0071
+#endif
+
 // ---- Scale (Mercury radius = 1 unit) ----
 // Planet and Sun sizes are true relative to Mercury. E = Earth's radius in these units.
 // AU is the orbit scale: lower it to shrink the system (the true Sun-Earth distance would be ~61240).
@@ -29,6 +35,7 @@ float moonCamDistance=E, moonCamHeight=0;
 float moonOrbitSpeed=-0.5f, earthRotationSpeed=2, earthOrbitSpeed=-0.04f;
 float moveStep=1, tScale=1;                // set every frame by physics()
 bool  animationPaused=false, lockToMoon=false, overview=true;   // overview = default view
+bool  shiftHeld=false;                     // modifier keys don't auto-repeat, so Shift is tracked as held/released
 int   windowWidth=800, windowHeight=600;
 
 // ---- Planets (Earth is in the table; its Moon is drawn separately) ----
@@ -47,7 +54,7 @@ Planet planets[]={
 
 // ---- Camera ----
 float camX=0,camY=OV_VIEW_H,camZ=0, yaw=-90,pitch=-89;   // top-down view above the Sun, whole system in view
-float camFrontX=0,camFrontY=-1,camFrontZ=0;              // recomputed from yaw/pitch every frame in display()
+float camFrontX=0,camFrontY=-1,camFrontZ=0;              // view direction, recomputed from yaw/pitch every frame in display()
 float mouseSensitivity=0.1f;
 
 // ---- Lighting ----
@@ -207,13 +214,13 @@ void display(){
         "=== Controls ===",
         "M - Toggle Moon Lock",
         "P - Pause Animation",
-        "WASD - Move Camera",
+        "WASD - Move Camera (level)",
         "Mouse - Look Around",
         "R/0 - Reset (above Sun)",
         "O - Overview / True-scale view",
         "1-8 - Jump to Planet (Mercury..Neptune)",
         "+/- - Moon Distance (Lock mode)",
-        "Space/E - Move Up/Down",
+        "Space/Shift - Move Up/Down",
         "ESC - Exit"
     };
     int n=sizeof(lines)/sizeof(*lines);
@@ -234,14 +241,14 @@ void keyboard(unsigned char key,int,int){
     if(lockToMoon && key!='m' && key!='M' && key!='p' && key!='P' && key!='+' && key!='=' && key!='-' && key!=27) return;
 
     float spd=moveStep;
-    float rx=cos(toRad(yaw-90)), rz=sin(toRad(yaw-90));
-    switch(key){
-        case 'w': case 'W': camX+=spd*camFrontX; camY+=spd*camFrontY; camZ+=spd*camFrontZ; break;
-        case 's': case 'S': camX-=spd*camFrontX; camY-=spd*camFrontY; camZ-=spd*camFrontZ; break;
+    float fx=cos(toRad(yaw)),    fz=sin(toRad(yaw));      // forward, flattened onto the horizontal plane
+    float rx=cos(toRad(yaw-90)), rz=sin(toRad(yaw-90));   // sideways
+    switch(key){   // W/A/S/D follow where you look, but never change height (Y); use Space/E for that
+        case 'w': case 'W': camX+=spd*fx; camZ+=spd*fz; break;
+        case 's': case 'S': camX-=spd*fx; camZ-=spd*fz; break;
         case 'd': case 'D': camX-=spd*rx; camZ-=spd*rz; break;
         case 'a': case 'A': camX+=spd*rx; camZ+=spd*rz; break;
-        case ' ':            camY+=spd; break;
-        case 'e': case 'E': camY-=spd; break;
+        case ' ':            camY+=(glutGetModifiers()&GLUT_ACTIVE_SHIFT)?-spd:spd; break;   // up (Shift+Space = down)
         case 'o': case 'O': overview=!overview;   // then fall through to reset the camera for the new mode
         case 'r': case 'R': case '0':
             camX=0; camY=overview?OV_VIEW_H:3*SUN_R; camZ=0; yaw=-90; pitch=-89; break;
@@ -261,6 +268,16 @@ void keyboard(unsigned char key,int,int){
     glutPostRedisplay();
 }
 
+// Shift on its own moves the camera down while held (FreeGLUT reports it as a special key; update() does the
+// moving every frame). Shift+Space also moves down on any GLUT.
+void special(int key,int,int){
+    if(key==GLUT_KEY_SHIFT_L || key==GLUT_KEY_SHIFT_R) shiftHeld=true;
+}
+
+void specialUp(int key,int,int){
+    if(key==GLUT_KEY_SHIFT_L || key==GLUT_KEY_SHIFT_R) shiftHeld=false;
+}
+
 void mouseMotion(int x,int y){
     if(lockToMoon) return;
 
@@ -272,6 +289,7 @@ void mouseMotion(int x,int y){
 }
 
 void update(int){
+    if(shiftHeld && !lockToMoon) camY-=moveStep*0.5f;   // held Shift: steady descent (about the rate of a repeating key)
     physics();   // planets move, so re-check the camera against them every frame
     if(!animationPaused){
         moonAngle +=moonOrbitSpeed*tScale;  if(moonAngle >=360) moonAngle -=360;
@@ -306,6 +324,8 @@ int main(int argc,char** argv){
 
     glutDisplayFunc(display);
     glutKeyboardFunc(keyboard);
+    glutSpecialFunc(special);
+    glutSpecialUpFunc(specialUp);
     glutPassiveMotionFunc(mouseMotion);
     glutReshapeFunc(reshape);
     glutTimerFunc(0,update,0);

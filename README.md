@@ -1,12 +1,13 @@
 # Solar System Visualization: Earth–Moon Phases in OpenGL
 
-A real-time 3D simulation written in C++ with OpenGL and FreeGLUT. It shows the Sun, all eight planets, and Earth's Moon on circular orbits. Planet and Sun sizes are true relative to Earth, and orbital distances are scaled down so the system is navigable. It also demonstrates how the Moon's phases come from lighting geometry.
+A real-time 3D simulation written in C++ with OpenGL and FreeGLUT. It shows the Sun, all eight planets, and Earth's Moon on circular orbits. Planet and Sun sizes are true relative to each other, and orbital distances are scaled down so the system is navigable. It also demonstrates how the Moon's phases come from lighting geometry.
 
 ## Features
 
 - Sun at the origin, acting as the point light source for the whole scene
 - Eight planets (Mercury to Neptune) drawn from a single data table by a single loop in `display()`
 - Every planet revolves around the Sun, with speed following Kepler's third law (closer planets move faster)
+- Saturn has a tilted ring (1.24 to 2.27 Saturn radii, tilted 26.7°), lit on both sides
 - Earth spins on its axis; the Moon orbits Earth and is tidally locked (one rotation per orbit, the same face toward Earth)
 - Moon phases come out of the lighting itself: Phong illumination with per-vertex normals, no phase textures
 - Free-fly camera (keyboard and mouse) and a Moon-lock camera that sits on the Earth–Moon line looking at the Moon
@@ -47,9 +48,9 @@ g++ Solar_System.cpp -o Solar_System -framework OpenGL -framework GLUT
 
 | Key | Action |
 |---|---|
-| `W` `A` `S` `D` | Move the camera |
+| `W` `A` `S` `D` | Move forward / left / back / right relative to where you look, staying level (height never changes) |
 | Mouse | Look around |
-| `Space` / `E` | Move up / down |
+| `Space` / `Shift` | Move up / down |
 | `O` | Toggle Overview mode (default) / True-scale mode |
 | `R` or `0` | Reset to the top-down view above the Sun |
 | `1`–`8` | Jump above Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, Neptune, stopping at the minimum camera distance |
@@ -128,7 +129,7 @@ All planets spin at Earth's rate.
 
 ## Code Overview
 
-Everything is in `Solar_System.cpp`, which has nine functions:
+Everything is in `Solar_System.cpp`, which has ten functions:
 
 | Function | Purpose |
 |---|---|
@@ -137,6 +138,7 @@ Everything is in `Solar_System.cpp`, which has nine functions:
 | `physics()` | Per-frame camera and time rules: stop distance around bodies, gradual approach step size, and slowdown of revolutions near planets |
 | `display()` | Camera, light, planets, Moon, Sun, overview dots, controls overlay |
 | `keyboard()` | Key handling, including reset, overview toggle and planet jumps |
+| `special()` | Shift key (move down) |
 | `mouseMotion()` | Mouse look |
 | `update()` | Animation timer |
 | `reshape()` | Window resize and perspective projection |
@@ -150,7 +152,7 @@ To add or change a planet, edit its row in the `planets[]` table: radius, distan
 - In Overview mode the planet dots are markers, not to scale.
 - The Moon's orbit radius is 3 Earth radii (7.83 units) for visibility. The true value is about 60 Earth radii.
 - The Moon's tidally locked rotation is not visible, because it has no surface features or texture.
-- No Saturn rings, moons for other planets, axial tilts, elliptical orbits, textures, or star background.
+- Saturn's ring is a single flat, opaque band: no gaps, transparency, or shadow cast by the planet. No moons for other planets, planetary axial tilts (other than the ring's), elliptical orbits, textures, or star background.
 - Every planet spins at the same rate.
 - At the true scale, very distant objects lose depth precision, so planets seen from far away can show depth artifacts.
 
