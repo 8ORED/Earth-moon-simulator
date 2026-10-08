@@ -9,6 +9,11 @@
 #define PI 3.14159265358979323846f
 #define toRad(d) ((d)*PI/180.0f)
 
+// OpenGL 1.2 constant that the old Windows gl.h does not declare
+#ifndef GL_CLAMP_TO_EDGE
+#define GL_CLAMP_TO_EDGE 0x812F
+#endif
+
 // FreeGLUT's special-key codes for the Shift keys (not declared by every glut.h)
 #ifndef GLUT_KEY_SHIFT_L
 #define GLUT_KEY_SHIFT_L 0x0070
@@ -61,7 +66,7 @@ Planet planets[]={
     {10.470f, 19.200f*AU, 0.55f,0.85f,0.90f, "uranus.jpg",        0},   // Uranus
     {10.130f, 30.100f*AU, 0.25f,0.35f,0.90f, "neptune.jpg",       0}    // Neptune
 };
-GLuint moonTex=0, sunTex=0, ringTex=0, starTex=0;   // Moon, Sun and Saturn's ring (saturn_ring_alpha.png) and the star backbround
+GLuint moonTex=0, sunTex=0, ringTex=0, starTex=0;   // Moon, Sun, Saturn's ring (saturn_ring_alpha.png) and the star background
 
 // ---- Camera ----
 float camX=0,camY=OV_VIEW_H,camZ=0, yaw=-90,pitch=-89;   // top-down view above the Sun, whole system in view
@@ -90,7 +95,7 @@ GLuint loadTexture(const char* file){
     if(!px){ printf("Texture not found: %s\n",path); return 0; }
     GLuint id; glGenTextures(1,&id); glBindTexture(GL_TEXTURE_2D,id);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_REPEAT);   // longitude wraps around
-    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP);    // latitude does not
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);   // latitude does not (plain GL_CLAMP blends in the black border at the poles)
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
     gluBuild2DMipmaps(GL_TEXTURE_2D,GL_RGBA,w,h,GL_RGBA,GL_UNSIGNED_BYTE,px);

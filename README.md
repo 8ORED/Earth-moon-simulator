@@ -11,7 +11,7 @@ A real-time 3D simulation written in C++ with OpenGL and FreeGLUT. It shows the 
 - Faint, planet-coloured orbit lines in both modes
 - Debug readout (`B`) showing the camera position and movement speed
 - Earth spins on its axis; the Moon orbits Earth and is tidally locked (one rotation per orbit, the same face toward Earth)
-- Textured Sun, planets, Moon and Saturn's ring (see Textures)
+- Textured Sun, planets, Moon and Saturn's ring, with a Milky Way star background (see Textures)
 - Moon phases come out of the lighting itself: Phong illumination with per-vertex normals, no phase textures
 - Free-fly camera (keyboard and mouse) and a Moon-lock camera that sits on the Earth–Moon line looking at the Moon
 - **Overview mode (default):** the whole solar system fits on screen, with accurate relative sizes (the Sun is far larger than any planet) and compressed orbit distances
@@ -64,9 +64,9 @@ Put these images in a folder named `textures` next to where you run the program:
 | `saturn_ring_alpha.png` | Saturn's ring (with transparency) |
 | `uranus.jpg` | Uranus |
 | `neptune.jpg` | Neptune |
-| `stars_milky_way.jpg` | Background |
+| `stars_milky_way.jpg` | Star background (a large sphere around the camera) |
 
-Any missing file is reported in the console and that body is drawn in a plain colour instead, so the program still runs. The 2k versions of the images are recommended, because larger ones take longer to load at start-up.
+Any missing file is reported in the console and that body is drawn in a plain colour instead (a missing star background is simply black), so the program still runs. The 2k versions of the images are recommended, because larger ones take longer to load at start-up.
 
 Sphere textures are equirectangular maps (longitude left to right, latitude top to bottom). The ring image is read as a radial strip: its left edge is the inner edge of the ring and its right edge is the outer edge.
 
@@ -169,7 +169,7 @@ Everything is in `Solar_System.cpp`, which has thirteen functions:
 | `loadTexture()` | Loads an image from `textures/` into an OpenGL texture with mipmaps |
 | `drawSphere()` | Triangle-mesh sphere with per-vertex normals and texture coordinates |
 | `physics()` | Per-frame camera and time rules: stop distance around bodies, gradual approach step size, and slowdown of revolutions near planets |
-| `display()` | Camera, light, planets, Moon, Sun, Saturn's ring, orbit lines, overview dots, controls overlay |
+| `display()` | Camera, light, star background, planets, Moon, Sun, Saturn's ring, orbit lines, overview dots, controls overlay |
 | `keyboard()` / `keyboardUp()` | Key presses and releases: one-shot actions (reset, overview toggle, planet jumps, Moon lock, pause) and the held-key table |
 | `special()` / `specialUp()` | Track whether Shift is held (it does not auto-repeat) |
 | `mouseMotion()` | Mouse look |
